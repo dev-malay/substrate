@@ -1,8 +1,20 @@
+import {
+  coreAdd,
+  coreDelete,
+  coreFactsMap,
+  coreList,
+} from "./stores/core.js";
+import {
+  shortTermMessages,
+  stAdd,
+  stDelete,
+  stRecent,
+} from "./stores/shortTerm.js";
 import type { Message, Session } from "./types.js";
 
 export const sessions = new Map<string, Session>();
-export const messages = new Map<string, Message[]>();
-export const coreFacts = new Map<string, string[]>();
+export const messages = shortTermMessages;
+export const coreFacts = coreFactsMap;
 
 export type StoredContext = {
   queryId: string;
@@ -10,38 +22,34 @@ export type StoredContext = {
   query: string;
   memoryIds: string[];
   createdAt: number;
-}
+};
 
 export const contexts = new Map<string, StoredContext>();
 
 export function listMessages(sessionId: string): Message[] {
-  return messages.get(sessionId) || [];
+  return stRecent(sessionId, Number.MAX_SAFE_INTEGER);
 }
 
 export function addMessage(msg: Message) {
-  const list = messages.get(msg.sessionId) || [];
-  list.push(msg);
-  messages.set(msg.sessionId, list);
+  stAdd(msg);
 }
 
 export function getFacts(sessionId: string): string[] {
-  return coreFacts.get(sessionId) || [];
+  return coreList(sessionId);
 }
 
 export function addFact(sessionId: string, fact: string) {
-  const list = coreFacts.get(sessionId) || [];
-  list.push(fact);
-  coreFacts.set(sessionId, list);
+  coreAdd(sessionId, fact);
 }
 
 export function sessionExists(sessionId: string): boolean {
   if (sessions.has(sessionId)) return true;
-  if ((messages.get(sessionId) || []).length > 0) return true;
-  return (coreFacts.get(sessionId) || []).length > 0;
+  if ((shortTermMessages.get(sessionId) || []).length > 0) return true;
+  return (coreFactsMap.get(sessionId) || []).length > 0;
 }
 
 export function deleteSession(sessionId: string) {
   sessions.delete(sessionId);
-  messages.delete(sessionId);
-  coreFacts.delete(sessionId);
+  stDelete(sessionId);
+  coreDelete(sessionId);
 }

@@ -9,6 +9,10 @@
     "start": "bun dist/index.js",
     "check-types": "tsc --noEmit"
   },
+  "dependencies": {
+    "ioredis": "^5.4.0",
+    "js-tiktoken": "^1.0.0"
+  },
   "devDependencies": {
     "@repo/typescript-config": "*",
     "@types/node": "26.4.1",
