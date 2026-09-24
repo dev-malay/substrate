@@ -1,4 +1,6 @@
-import { badRequest, noContent, notFound, unprocessable } from "./errors.js";
+import { config } from "./config.js";
+import { makeEmbeddingProvider } from "./embeddings.js";
+import { badRequest, noContent, notFound, queueFull, unprocessable } from "./errors.js";
 import {
   addFact,
   addMessage,
@@ -10,8 +12,13 @@ import {
   sessions,
 } from "./store.js";
 import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
+import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
+import { stTrim } from "./stores/shortTerm.js";
+import { vectors } from "./stores/vectors.js";
 
 const port = Number(process.env.PORT || 3000);
+const embedder = makeEmbeddingProvider();
+startEmbeddingWorkers(embedder, config.embeddingMaxConcurrency, config.mpscChannelSize);
 
 function parsePositiveInt(value: string | null, fallback: number): number | null {
   if (value === null || value === "") return fallback;
@@ -61,6 +68,8 @@ Bun.serve({
 
       if (method === "DELETE") {
         deleteSession(sessionId);
+        vectors.deleteSession(sessionId);
+        tryEnqueue({ kind: "deleteSession", sessionId });
         return noContent();
       }
     }
@@ -99,6 +108,9 @@ Bun.serve({
         embeddingStatus: "pending" as const,
       };
       addMessage(msg);
+      stTrim(sessionId, config.shortTermCount);
+      const queued = tryEnqueue({ kind: "embed", sessionId, messageId: msg.id, text: content });
+      if (!queued) return queueFull();
       return noContent();
     }
 
