@@ -25,6 +25,10 @@ export function redirectToLeader(leaderUrl: string, path: string): Response {
   });
 }
 
+export function queueFull(): Response {
+  return Response.json({ error: "queue full" }, { status: 503 });
+}
+
 export function noContent(): Response {
   return new Response(null, { status: 204 });
 }
