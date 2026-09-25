@@ -12,6 +12,8 @@ export type AppConfig = {
   similarityThresholdDefault: number;
   topKDefault: number;
   retrievalContextTtlSecs: number;
+  retrievalCandidateMultiplier: number;
+  retrievalFeedbackWeight: number;
 };
 
 function intFromEnv(name: string, fallback: number): number {
@@ -44,7 +46,9 @@ export function getConfig(): AppConfig {
     tokenBudgetDefault: intFromEnv("MAX_TOKENS_DEFAULT", 8000),
     similarityThresholdDefault: floatFromEnv("SIMILARITY_THRESHOLD", 0.7),
     topKDefault: intFromEnv("TOP_K_DEFAULT", 10),
-    retrievalContextTtlSecs: intFromEnv("RETRIEVAL_CONTEXT_TTL_SECS", 300)
+    retrievalContextTtlSecs: intFromEnv("RETRIEVAL_CONTEXT_TTL_SECS", 300),
+    retrievalCandidateMultiplier: intFromEnv("RETRIEVAL_CANDIDATE_MULTIPLIER", 2),
+    retrievalFeedbackWeight: floatFromEnv("RETRIEVAL_FEEDBACK_WEIGHT", 1.0)
   };
 
 }

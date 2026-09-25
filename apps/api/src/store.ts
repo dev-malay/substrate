@@ -11,6 +11,7 @@ import {
   stRecent,
 } from "./stores/shortTerm.js";
 import type { Message, Session } from "./types.js";
+import { config } from "./config.js";
 
 export const sessions = new Map<string, Session>();
 export const messages = shortTermMessages;
@@ -22,9 +23,29 @@ export type StoredContext = {
   query: string;
   memoryIds: string[];
   createdAt: number;
+  ranks: number[];
+  retrievalScores: number[];
 };
 
 export const contexts = new Map<string, StoredContext>();
+
+function pruneContexts() {
+  const ttlMs = config.retrievalContextTtlSecs * 1000;
+  const now = Date.now();
+  for (const [id, ctx] of [...contexts]) {
+    if (now - ctx.createdAt > ttlMs) contexts.delete(id);
+  }
+}
+
+export function recordContext(ctx: StoredContext) {
+  pruneContexts();
+  contexts.set(ctx.queryId, ctx);
+}
+
+export function resolveContext(queryId: string): StoredContext | undefined {
+  pruneContexts();
+  return contexts.get(queryId);
+}
 
 export function listMessages(sessionId: string): Message[] {
   return stRecent(sessionId, Number.MAX_SAFE_INTEGER);
