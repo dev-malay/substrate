@@ -46,9 +46,9 @@ flowchart LR
 
     AG -->|HTTP| HTTP
     HTTP --> RT
-    RT -->|direct (single mode)| ST
-    RT -->|direct (single mode)| CORE
-    RT -->|client_write (cluster mode)| RAFT
+    RT -->|direct single mode| ST
+    RT -->|direct single mode| CORE
+    RT -->|client write cluster mode| RAFT
     RAFT -->|apply| ST
     RAFT -->|apply| CORE
     RAFT -->|gRPC| GRPC
