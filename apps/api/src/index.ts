@@ -29,6 +29,17 @@ const port = Number(process.env.PORT || 3000);
 const embedder = makeEmbeddingProvider();
 startEmbeddingWorkers(embedder, config.embeddingMaxConcurrency, config.mpscChannelSize);
 
+if (config.nodeId !== null && Number.isInteger(config.nodeId)) {
+  const logStore = new LogStore(config.raftDbPath);
+  const raftNode = new RaftNode(config.nodeId, logStore);
+  setRaftNode(raftNode);
+  setClusterPeers(config.peers);
+  const others = config.peers.filter((p) => p.id !== config.nodeId);
+  raftNode.start(others, others.map((p) => p.id));
+  if (config.raftAddr) serveRaftGrpc(raftNode, config.raftAddr)
+    
+}
+
 function raftRedirect(path: string): Response | null {
   return clusterWriteRedirect(path);
 }
@@ -75,6 +86,9 @@ Bun.serve({
     if (method === "GET" && path === "/health") {
       return new Response(null, { status: 200 });
     }
+
+    const clusterRes = await handleCluster(req, url);
+    if (clusterRes) return clusterRes;
 
     if (method === "POST" && parts.length === 1 && parts[0] === "sessions") {
       let body: CreateSessionBody = {};
