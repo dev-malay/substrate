@@ -30,6 +30,13 @@ export function applyCommand(cmd: MemoryCommand) {
           createdAt: new Date().toISOString(),
         });
       }
+
+      tryEnqueue({
+        kind: "embed",
+        sessionId: cmd.session_id,
+        messageId: cmd.message.id,
+        text: cmd.message.content
+      });
       break;
     }
 
