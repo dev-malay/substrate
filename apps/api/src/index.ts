@@ -4,14 +4,12 @@ import { badRequest, noContent, notFound, queueFull, unprocessable } from "./err
 import {
   addFact,
   addMessage,
-  contexts,
   deleteSession,
-  getFacts,
-  listMessages,
   sessionExists,
   sessions,
 } from "./store.js";
 import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
+import { assembleContext } from "./assembler.js";
 import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
 import { stTrim } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
@@ -126,19 +124,12 @@ Bun.serve({
         return badRequest("bad query");
       }
 
-      const recent = listMessages(sessionId).slice(-20);
-      const lines = recent.map((m) => `${m.role}: ${m.content}`);
-      const facts = getFacts(sessionId);
-      const head = facts.map((f) => `Fact: ${f}`);
-      const queryId = crypto.randomUUID();
-      contexts.set(queryId, {
-        queryId,
-        sessionId,
-        query: recent.length > 0 ? recent[recent.length - 1]!.content : "",
-        memoryIds: [],
-        createdAt: Date.now(),
+      const recent = await assembleContext(embedder, sessionId, {
+        maxTokens,
+        threshold,
+        topK,
       });
-      return Response.json({ context: [...head, ...lines].join("\n"), query_id: queryId });
+      return Response.json({ context: recent.context, query_id: recent.query_id });
     }
 
     if (parts.length === 3 && parts[0] === "sessions" && parts[2] === "search") {
@@ -158,7 +149,12 @@ Bun.serve({
         return badRequest("top_k must be above zero");
       }
       void sessionId;
-      return Response.json({ results: [] });
+      const [qvec] = await embedder.embed([body.query.trim()]);
+      if (!qvec) return Response.json({ results: [] });
+      const hits = vectors.search(sessionId, qvec, body.top_k);
+      return Response.json({
+        results: hits.map((h) => ({ memory_id: h.memoryId, text: h.text, score: h.score })),
+      });
     }
 
     if (parts.length === 3 && parts[0] === "sessions" && parts[2] === "core-memory") {
