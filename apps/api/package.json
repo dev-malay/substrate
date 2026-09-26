@@ -10,6 +10,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@grpc/proto-loader": "^0.7.0",
     "ioredis": "^5.4.0",
     "js-tiktoken": "^1.0.0"
   },
