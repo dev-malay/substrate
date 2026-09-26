@@ -78,6 +78,9 @@ export class RaftNode {
 
   addPeer(p: Peer) {
     this.peers.set(p.id, p);
+    if (!this.clients.has(p.id)) {
+      this.clients.set(p.id, makeRaftClient(p.addr));
+    }
   }
 
   removePeer(id: NodeId) {

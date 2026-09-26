@@ -70,7 +70,10 @@ export function makeRaftClient(addr: string): RaftClient {
         term,
         leader_id: leaderId,
         prev_log_id: toLogId(prevLogId),
-        entries: [],
+        entries: entries.map((e) => ({
+          log_id: toLogId(e.logId),
+          payload: Buffer.from(JSON.stringify(e.command)),
+        })),
         leader_commit: leaderCommit
       });
       return { term: res.term, success: res.success, conflictIndex: res.conflict_index };
