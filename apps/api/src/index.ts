@@ -10,6 +10,8 @@ import {
 } from "./cluster.js";
 import { LogStore } from "./raft/logStore.js";
 import { ForwardToLeader, NoLeader, RaftNode } from "./raft/consensus.js";
+import { decodeSnapshot, restoreSnapshot } from "./raft/snapshot.js";
+import { recoverStateMachine } from "./raft/recovery.js";
 import { serveRaftGrpc } from "./raft/grpcServer.js";
 import type { MemoryCommand } from "./raft/types.js";
 import {
@@ -31,13 +33,22 @@ startEmbeddingWorkers(embedder, config.embeddingMaxConcurrency, config.mpscChann
 
 if (config.nodeId !== null && Number.isInteger(config.nodeId)) {
   const logStore = new LogStore(config.raftDbPath);
+  const snapshotIndex = recoverStateMachine(logStore);
   const raftNode = new RaftNode(config.nodeId, logStore);
+  raftNode.lastApplied = Math.min(snapshotIndex, raftNode.commitIndex);
+  raftNode.onSnapshotInstall = async (meta, data) => {
+    restoreSnapshot(decodeSnapshot(data));
+    logStore.saveSnapshot(meta.lastLogId.index, data);
+    logStore.saveCommitted(meta.lastLogId.index);
+    raftNode.lastApplied = meta.lastLogId.index;
+    raftNode.commitIndex = Math.max(raftNode.commitIndex, meta.lastLogId.index);
+  };
   setRaftNode(raftNode);
   setClusterPeers(config.peers);
   const others = config.peers.filter((p) => p.id !== config.nodeId);
   raftNode.start(others, others.map((p) => p.id));
-  if (config.raftAddr) serveRaftGrpc(raftNode, config.raftAddr)
-    
+  console.log("raftNode started");
+  if (config.raftAddr) serveRaftGrpc(raftNode, config.raftAddr);
 }
 
 function raftRedirect(path: string): Response | null {
