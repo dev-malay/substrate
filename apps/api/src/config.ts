@@ -19,7 +19,8 @@ export type AppConfig = {
   advertiseAddr: string | null;
   raftDbPath: string;
   peers: Array<{ id: number; addr: string; httpAddr: string }>;
-  
+  snapshotLogThreshold: number;
+  historySnapshots: number;
 };
 
 function intFromEnv(name: string, fallback: number): number {
@@ -94,7 +95,9 @@ export function getConfig(): AppConfig {
     raftAddr: process.env.RAFT_ADDR || null,
     advertiseAddr: process.env.RAFT_ADVERTISE_ADDR || null,
     raftDbPath: process.env.RAFT_DB_PATH || "./data/raft/substrate.redb",
-    peers
+    peers,
+    snapshotLogThreshold: intFromEnv("SNAPSHOT_LOG_THRESHOLD", 1000),
+    historySnapshots: intFromEnv("HISTORY_SNAPSHOTS", 5)
   };
 
 }
