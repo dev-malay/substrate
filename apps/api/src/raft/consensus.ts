@@ -1,6 +1,8 @@
 import type { LogEntry, LogId, MemoryCommand, NodeId, SnapshotMeta } from "./types.js";
 import { LogStore } from "./logStore.js";
 import { applyCommand } from "./stateMachine.js";
+import { buildSnapshot, encodeSnapshot } from "./snapshot.js";
+import { config } from "../config.js";
 import { makeRaftClient, type RaftClient } from "./network.js";
 
 export class ForwardToLeader extends Error {
@@ -46,6 +48,7 @@ export class RaftNode {
     resolve: () => void;
     reject: (e: Error) => void;
   }> =[];
+  private lastSnapshotIndex = 0;
 
   constructor(
     public id: NodeId,
@@ -56,6 +59,8 @@ export class RaftNode {
     this.votedFor = vote.votedFor;
     this.commitIndex = store.loadCommitted();
     this.lastApplied = this.commitIndex;
+    const kept = store.listSnapshotIndexes();
+    this.lastSnapshotIndex = kept.length > 0 ? kept[kept.length - 1]! : 0;
   }
 
   get lastLogId(): LogId {
@@ -260,7 +265,27 @@ export class RaftNode {
         }
         this.lastApplied = next;
       }
+      this.maybeSnapshot();
       await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+
+  takeSnapshot(): number {
+    const snap = buildSnapshot();
+    this.store.saveSnapshot(this.lastApplied, encodeSnapshot(snap));
+    this.lastSnapshotIndex = this.lastApplied;
+    this.store.pruneSnapshots(config.historySnapshots);
+    this.store.purge(this.lastApplied, this.store.oldestRetainedIndex());
+    return this.lastSnapshotIndex;
+  }
+
+  private maybeSnapshot() {
+    if (this.commitIndex - this.lastSnapshotIndex >= config.snapshotLogThreshold) {
+      try {
+        this.takeSnapshot();
+      } catch {
+        // snapshot failure never blocks applies 
+      }
     }
   }
 
