@@ -1,0 +1,84 @@
+services:
+  redis-1:
+    image: redis:7-alpine
+  redis-2:
+    image: redis:7-alpine
+  redis-3:
+    image: redis:7-alpine
+
+  node-1:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3000:3000"
+      - "9001:9001"
+    environment:
+      PORT: 3000
+      NODE_ID: 1
+      RAFT_ADDR: 0.0.0.0:9001
+      RAFT_ADVERTISE_ADDR: node-1:9001
+      CLUSTER_PEERS: 2:node-2:9001,3:node-3:9001
+      CLUSTER_HTTP_PEERS: 1:http://node-1:3000,2:http://node-2:3000,3:http://node-3:3000
+      REDIS_URL: redis://redis-1:6379
+      RAFT_DB_PATH: /data/raft/substrate.redb
+      EMBEDDING_PROVIDER: mock
+      HISTORY_SNAPSHOTS: 3
+      SNAPSHOT_LOG_THRESHOLD: 1000
+    volumes:
+      - node_1_raft:/data/raft
+    depends_on:
+      - redis-1
+
+  node-2:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3001:3000"
+      - "9002:9001"
+    environment:
+      PORT: 3000
+      NODE_ID: 2
+      RAFT_ADDR: 0.0.0.0:9001
+      RAFT_ADVERTISE_ADDR: node-2:9001
+      CLUSTER_PEERS: 1:node-1:9001,3:node-3:9001
+      CLUSTER_HTTP_PEERS: 1:http://node-1:3000,2:http://node-2:3000,3:http://node-3:3000
+      REDIS_URL: redis://redis-2:6379
+      RAFT_DB_PATH: /data/raft/substrate.redb
+      EMBEDDING_PROVIDER: mock
+      HISTORY_SNAPSHOTS: 3
+      SNAPSHOT_LOG_THRESHOLD: 1000
+    volumes:
+      - node_2_raft:/data/raft
+    depends_on:
+      - redis-2
+
+  node-3:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3002:3000"
+      - "9003:9001"
+    environment:
+      PORT: 3000
+      NODE_ID: 3
+      RAFT_ADDR: 0.0.0.0:9001
+      RAFT_ADVERTISE_ADDR: node-3:9001
+      CLUSTER_PEERS: 1:node-1:9001,2:node-2:9001
+      CLUSTER_HTTP_PEERS: 1:http://node-1:3000,2:http://node-2:3000,3:http://node-3:3000
+      REDIS_URL: redis://redis-3:6379
+      RAFT_DB_PATH: /data/raft/substrate.redb
+      EMBEDDING_PROVIDER: mock
+      HISTORY_SNAPSHOTS: 3
+      SNAPSHOT_LOG_THRESHOLD: 1000
+    volumes:
+      - node_3_raft:/data/raft
+    depends_on:
+      - redis-3
+
+volumes:
+  node_1_raft:
+  node_2_raft:
+  node_3_raft:
