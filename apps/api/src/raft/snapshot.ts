@@ -2,6 +2,7 @@ import { coreDumpAll, coreRestoreAll } from "../stores/core.js";
 import { stDumpAll, stRestoreAll } from "../stores/shortTerm.js";
 import { sessions } from "../store.js";
 import type { Message } from "../types.js";
+import { tryEnqueue } from "../worker.js";
 import { sessionAgents, visibility } from "./stateMachine.js";
 import type { Entity, Relationship, Visibility } from "./types.js";
 
@@ -70,6 +71,12 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
   for (const item of snap.coreMemory || []) {
     if (!sessions.has(item.sessionId)) {
       sessions.set(item.sessionId, { id: item.sessionId, createdAt: new Date().toISOString() });
+    }
+  }
+  for (const item of snap.shortTerm || []) {
+    for (const msg of item.messages) {
+      msg.embeddingStatus = "pending";
+      tryEnqueue({ kind: "embed", sessionId: item.sessionId, messageId: msg.id, text: msg.content })
     }
   }
 }
