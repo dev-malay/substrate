@@ -14,6 +14,12 @@ export type AppConfig = {
   retrievalContextTtlSecs: number;
   retrievalCandidateMultiplier: number;
   retrievalFeedbackWeight: number;
+  nodeId: number | null;
+  raftAddr: string | null;
+  advertiseAddr: string | null;
+  raftDbPath: string;
+  peers: Array<{ id: number; addr: string; httpAddr: string }>;
+  
 };
 
 function intFromEnv(name: string, fallback: number): number {
@@ -32,7 +38,42 @@ function floatFromEnv(name: string, fallback: number): number {
   return n;
 }
 
+function parsePeers(raw: string): Array<{ id: number; addr: string; httpAddr: string }> {
+  const out: Array<{ id: number; addr: string; httpAddr: string }> = [];
+  for (const part of raw.split(",")) {
+    const cells = part.trim().split(":");
+    if (cells.length !== 3) continue;
+    const id = Number(cells[0]);
+    const host = cells[1];
+    const grpcPort = cells[2];
+    if (!Number.isInteger(id) || !host || !grpcPort) continue;
+    out.push({ id, addr: host + ":" + grpcPort, httpAddr: "http://" + host + ":3000" });
+  }
+  return out;
+}
+
+function parseHttpPeers(
+  raw: string,
+): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const part of raw.split(",")) {
+    const idx = part.indexOf(":");
+    if (idx < 0) continue;
+    const id = Number(part.slice(0, idx).trim());
+    const url = part.slice(idx + 1).trim();
+    if (Number.isInteger(id) && url) out.set(id, url);
+  }
+  return out;
+}
+
 export function getConfig(): AppConfig {
+  const peers = parsePeers(process.env.CLUSTER_PEERS || "");
+  const httpPeers = parseHttpPeers(process.env.CLUSTER_HTTP_PEERS || "");
+  for (const p of peers) {
+    const override = httpPeers.get(p.id);
+    if (override) p.httpAddr = override;
+  }
+  const nodeRaw = (process.env.NODE_ID || "").trim();
   return {
     redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
     lanceDbPath: process.env.LANCE_DB_PATH || "./data/lancedb",
@@ -48,7 +89,12 @@ export function getConfig(): AppConfig {
     topKDefault: intFromEnv("TOP_K_DEFAULT", 10),
     retrievalContextTtlSecs: intFromEnv("RETRIEVAL_CONTEXT_TTL_SECS", 300),
     retrievalCandidateMultiplier: intFromEnv("RETRIEVAL_CANDIDATE_MULTIPLIER", 2),
-    retrievalFeedbackWeight: floatFromEnv("RETRIEVAL_FEEDBACK_WEIGHT", 1.0)
+    retrievalFeedbackWeight: floatFromEnv("RETRIEVAL_FEEDBACK_WEIGHT", 1.0),
+    nodeId: nodeRaw.length > 0 ? Number(nodeRaw) : null,
+    raftAddr: process.env.RAFT_ADDR || null,
+    advertiseAddr: process.env.RAFT_ADVERTISE_ADDR || null,
+    raftDbPath: process.env.RAFT_DB_PATH || "./data/raft/substrate.redb",
+    peers
   };
 
 }

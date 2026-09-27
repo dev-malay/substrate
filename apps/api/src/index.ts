@@ -1,6 +1,17 @@
 import { config } from "./config.js";
 import { makeEmbeddingProvider } from "./embeddings.js";
-import { badRequest, noContent, notFound, queueFull, unprocessable } from "./errors.js";
+import { badRequest, noContent, noLeader, notFound, queueFull, unprocessable } from "./errors.js";
+import {
+  clusterWriteRedirect,
+  getRaftNode,
+  handleCluster,
+  setClusterPeers,
+  setRaftNode,
+} from "./cluster.js";
+import { LogStore } from "./raft/logStore.js";
+import { ForwardToLeader, NoLeader, RaftNode } from "./raft/consensus.js";
+import { serveRaftGrpc } from "./raft/grpcServer.js";
+import type { MemoryCommand } from "./raft/types.js";
 import {
   addFact,
   addMessage,
@@ -17,6 +28,38 @@ import { vectors } from "./stores/vectors.js";
 const port = Number(process.env.PORT || 3000);
 const embedder = makeEmbeddingProvider();
 startEmbeddingWorkers(embedder, config.embeddingMaxConcurrency, config.mpscChannelSize);
+
+if (config.nodeId !== null && Number.isInteger(config.nodeId)) {
+  const logStore = new LogStore(config.raftDbPath);
+  const raftNode = new RaftNode(config.nodeId, logStore);
+  setRaftNode(raftNode);
+  setClusterPeers(config.peers);
+  const others = config.peers.filter((p) => p.id !== config.nodeId);
+  raftNode.start(others, others.map((p) => p.id));
+  if (config.raftAddr) serveRaftGrpc(raftNode, config.raftAddr)
+    
+}
+
+function raftRedirect(path: string): Response | null {
+  return clusterWriteRedirect(path);
+}
+
+async function writeCommand(path: string, cmd: MemoryCommand): Promise<Response | null> {
+  const n = getRaftNode();
+  if (!n) return null;
+  try {
+    await n.clientWrite(cmd);
+    return noContent();
+  } catch (e) {
+    if (e instanceof ForwardToLeader) {
+      const target = clusterWriteRedirect(path);
+      if (target) return target;
+      return noLeader();
+    }
+    if (e instanceof NoLeader) return noLeader();
+    throw e;
+  }
+}
 
 function parsePositiveInt(value: string | null, fallback: number): number | null {
   if (value === null || value === "") return fallback;
@@ -44,6 +87,9 @@ Bun.serve({
       return new Response(null, { status: 200 });
     }
 
+    const clusterRes = await handleCluster(req, url);
+    if (clusterRes) return clusterRes;
+
     if (method === "POST" && parts.length === 1 && parts[0] === "sessions") {
       let body: CreateSessionBody = {};
       try {
@@ -57,6 +103,21 @@ Bun.serve({
         typeof body.agent_id === "string" && body.agent_id.trim().length > 0
           ? body.agent_id.trim()
           : undefined;
+      const raft = getRaftNode();
+      if (raft) {
+        try {
+          await raft.clientWrite({ kind: "RegisterSession", session_id: id, agent_id: agentId });
+          return Response.json({ session_id: id });
+        } catch (e) {
+          if (e instanceof ForwardToLeader) {
+            const target = raftRedirect(path);
+            if (target) return target;
+            return noLeader();
+          }
+          if (e instanceof NoLeader) return noLeader();
+          throw e;
+        }
+      }
       sessions.set(id, { id, createdAt: new Date().toISOString(), agentId });
       return Response.json({ session_id: id });
     }
@@ -65,6 +126,8 @@ Bun.serve({
       const sessionId = parts[1] || "";
 
       if (method === "DELETE") {
+        const viaRaft = await writeCommand(path, { kind: "DeleteSession", session_id: sessionId });
+        if (viaRaft) return viaRaft;
         deleteSession(sessionId);
         vectors.deleteSession(sessionId);
         tryEnqueue({ kind: "deleteSession", sessionId });
@@ -105,6 +168,12 @@ Bun.serve({
         timestamp: new Date().toISOString(),
         embeddingStatus: "pending" as const,
       };
+      const viaRaft = await writeCommand(path, {
+        kind: "AddMessage",
+        session_id: sessionId,
+        message: { id: msg.id, role: msg.role, content: msg.content, timestamp: msg.timestamp },
+      });
+      if (viaRaft) return viaRaft;
       addMessage(msg);
       stTrim(sessionId, config.shortTermCount);
       const queued = tryEnqueue({ kind: "embed", sessionId, messageId: msg.id, text: content });
@@ -173,6 +242,8 @@ Bun.serve({
       if (!sessions.has(sessionId)) {
         sessions.set(sessionId, { id: sessionId, createdAt: new Date().toISOString() });
       }
+      const viaRaft = await writeCommand(path, { kind: "AddFact", session_id: sessionId, fact: body.fact.trim() });
+      if (viaRaft) return viaRaft;
       addFact(sessionId, body.fact.trim());
       return noContent();
     }
