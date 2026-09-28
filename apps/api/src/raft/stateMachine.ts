@@ -4,6 +4,8 @@ import { coreAdd, coreDelete } from "../stores/core.js";
 import { stAdd, stDelete, stTrim } from "../stores/shortTerm.js";
 import { vectors } from "../stores/vectors.js";
 import { sessions } from "../store.js";
+import { applyExtraction, deleteSessionGraph } from "../knowledge/graph.js";
+import { tryEnqueueKnowledge } from "../knowledge/worker.js";
 import type { MemoryCommand, Visibility } from "./types.js";
 
 export const visibility = new Map<string, Visibility>();
@@ -37,6 +39,7 @@ export function applyCommand(cmd: MemoryCommand) {
         messageId: cmd.message.id,
         text: cmd.message.content
       });
+      tryEnqueueKnowledge({ sessionId: cmd.session_id, messageId: cmd.message.id, text: cmd.message.content });
       break;
     }
 
@@ -56,6 +59,7 @@ export function applyCommand(cmd: MemoryCommand) {
       stDelete(cmd.session_id);
       coreDelete(cmd.session_id);
       vectors.deleteSession(cmd.session_id);
+      deleteSessionGraph(cmd.session_id);
       tryEnqueue({ kind: "deleteSession", sessionId: cmd.session_id });
       break;
     }
@@ -76,7 +80,10 @@ export function applyCommand(cmd: MemoryCommand) {
       break;
     }
 
-    case "AddKnowledge":
+    case "AddKnowledge": {
+      applyExtraction(cmd.session_id, cmd.message_id, cmd.entities, cmd.relationships);
+      break;
+    }
     case "ApplyFeedback":
     case "ApplySummary":
     case "CreateCheckpoint":
