@@ -21,6 +21,9 @@ export type AppConfig = {
   peers: Array<{ id: number; addr: string; httpAddr: string }>;
   snapshotLogThreshold: number;
   historySnapshots: number;
+  knowledgeExtractor: string;
+  knowledgeMaxWorkers: number;
+  knowledgeChannelSize: number;
 };
 
 function intFromEnv(name: string, fallback: number): number {
@@ -97,7 +100,11 @@ export function getConfig(): AppConfig {
     raftDbPath: process.env.RAFT_DB_PATH || "./data/raft/substrate.redb",
     peers,
     snapshotLogThreshold: intFromEnv("SNAPSHOT_LOG_THRESHOLD", 1000),
-    historySnapshots: intFromEnv("HISTORY_SNAPSHOTS", 5)
+    historySnapshots: intFromEnv("HISTORY_SNAPSHOTS", 5),
+    knowledgeExtractor: process.env.KNOWLEDGE_EXTRACTOR || "mock",
+    knowledgeMaxWorkers: intFromEnv("KNOWLEDGE_MAX_WORKERS", 4),
+    knowledgeChannelSize: intFromEnv("KNOWLEDGE_CHANNEL_SIZE", 500)
+    
   };
 
 }

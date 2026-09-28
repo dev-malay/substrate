@@ -3,6 +3,10 @@ import { stDumpAll, stRestoreAll } from "../stores/shortTerm.js";
 import { sessions } from "../store.js";
 import type { Message } from "../types.js";
 import { tryEnqueue } from "../worker.js";
+import {
+  dumpGraphs,
+  restoreGraphs,
+} from "../knowledge/graph.js";
 import { sessionAgents, visibility } from "./stateMachine.js";
 import type { Entity, Relationship, Visibility } from "./types.js";
 
@@ -22,7 +26,12 @@ export type ClusterSnapshot = {
   version: number;
   shortTerm: SessionMessages[];
   coreMemory: SessionFacts[];
-  knowledgeGraph: { entities: Entity[]; relationships: Relationship[] };
+  knowledgeGraph: Array<{
+    sessionId: string;
+    entities: Entity[];
+    relationships: Relationship[];
+    processed: string[];
+  }>;
   globalGraph: null;
   visibility: Array<[string, Visibility]>;
   sessionAgents: Array<[string, string]>;
@@ -35,7 +44,7 @@ export function buildSnapshot(): ClusterSnapshot {
     version: SNAPSHOT_VERSION,
     shortTerm: stDumpAll(),
     coreMemory: coreDumpAll(),
-    knowledgeGraph: { entities: [], relationships: [] },
+    knowledgeGraph: dumpGraphs(),
     globalGraph: null,
     visibility: [...visibility.entries()],
     sessionAgents: [...sessionAgents.entries()],
@@ -48,6 +57,15 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
   sessions.clear();
   stRestoreAll(snap.shortTerm || []);
   coreRestoreAll(snap.coreMemory || []);
+  restoreGraphs(
+    (snap.knowledgeGraph || []) as Array<{
+      sessionId: string;
+      entities: Entity[];
+      relationships: Relationship[];
+      processed: string[];
+    }>
+  )
+  
   visibility.clear();
   for (const [sessionId, value] of snap.visibility || []) {
     visibility.set(sessionId, value);
@@ -91,7 +109,7 @@ export function decodeSnapshot(data: Buffer): ClusterSnapshot {
     version: typeof raw.version === "number" ? raw.version : 1,
     shortTerm: raw.shortTerm || [],
     coreMemory: raw.coreMemory || [],
-    knowledgeGraph: raw.knowledgeGraph || { entities: [], relationships: [] },
+    knowledgeGraph: Array.isArray(raw.knowledgeGraph) ? raw.knowledgeGraph : [],
     globalGraph: null,
     visibility: raw.visibility || [],
     sessionAgents: raw.sessionAgents || [],

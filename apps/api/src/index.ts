@@ -23,6 +23,9 @@ import {
 } from "./store.js";
 import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
 import { assembleContext } from "./assembler.js";
+import { makeKnowledgeExtractor } from "./knowledge/extractor.js";
+import { handleKnowledge } from "./knowledge/handler.js";
+import { startKnowledgeWorkers, tryEnqueueKnowledge } from "./knowledge/worker.js";
 import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
 import { stTrim } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
@@ -30,6 +33,11 @@ import { vectors } from "./stores/vectors.js";
 const port = Number(process.env.PORT || 3000);
 const embedder = makeEmbeddingProvider();
 startEmbeddingWorkers(embedder, config.embeddingMaxConcurrency, config.mpscChannelSize);
+startKnowledgeWorkers(
+  makeKnowledgeExtractor(),
+  config.knowledgeMaxWorkers,
+  config.knowledgeChannelSize,
+);
 
 if (config.nodeId !== null && Number.isInteger(config.nodeId)) {
   const logStore = new LogStore(config.raftDbPath);
@@ -189,6 +197,7 @@ Bun.serve({
       stTrim(sessionId, config.shortTermCount);
       const queued = tryEnqueue({ kind: "embed", sessionId, messageId: msg.id, text: content });
       if (!queued) return queueFull();
+      tryEnqueueKnowledge({ sessionId, messageId: msg.id, text: content });
       return noContent();
     }
 
@@ -264,3 +273,5 @@ Bun.serve({
 });
 
 console.log("server running on " + port);
+
+void handleKnowledge;
