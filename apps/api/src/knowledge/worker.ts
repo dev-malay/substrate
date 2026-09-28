@@ -38,17 +38,7 @@ async function runLoop(extractor: KnowledgeExtractor) {
           //leader changed, followers converge on next write 
         }
       } else {
-        const words = job.text
-          .split(/[^a-zA-Z]+/)
-          .map((w) => w.trim())
-          .filter((w) => w.length > 3)
-          .slice(0, 10);
-        applyExtraction(
-          job.sessionId,
-          job.messageId,
-          words.map((w) => ({ name: w, entity_type: "Thing", attributes: {} })),
-          [],
-        );
+        applyExtraction(job.sessionId, job.messageId, result.entities, result.relationships);
       }
     } catch {
       // extraction failure never blocks the queue
