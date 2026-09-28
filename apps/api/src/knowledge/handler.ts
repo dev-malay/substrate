@@ -26,15 +26,7 @@ export async function handleKnowledge(req: Request, url: URL): Promise<Response 
   if (method === "GET" && parts.length === 4 && parts[3] === "path") {
     const from = url.searchParams.get("from") || "";
     const to = url.searchParams.get("to") || "";
-    const edges = allRelationships(sessionId);
-    let direct = null;
-    for (const e of edges) {
-      if (e.from === from && e.to === to) {
-        direct = [{ from: e.from, relationship_type: e.relationship_type, to: e.to }];
-        break;
-      }
-    }
-    return Response.json({ from, to, path: direct });
+    return Response.json({ from, to, path: findPath(sessionId, from, to) });
   }
 
   if (method === "GET" && parts.length === 4 && parts[3] === "export") {

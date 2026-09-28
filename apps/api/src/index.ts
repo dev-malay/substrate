@@ -268,10 +268,12 @@ Bun.serve({
       return noContent();
     }
 
+    const knowledgeRes = await handleKnowledge(req, url);
+    if (knowledgeRes) return knowledgeRes;
+
     return notFound("not found");
   },
 });
 
 console.log("server running on " + port);
 
-void handleKnowledge;
