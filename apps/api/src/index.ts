@@ -24,6 +24,7 @@ import {
 import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
 import { assembleContext } from "./assembler.js";
 import { makeKnowledgeExtractor } from "./knowledge/extractor.js";
+import { handleGlobal } from "./knowledge/globalHandler.js";
 import { handleKnowledge } from "./knowledge/handler.js";
 import { startKnowledgeWorkers, tryEnqueueKnowledge } from "./knowledge/worker.js";
 import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
@@ -270,6 +271,9 @@ Bun.serve({
 
     const knowledgeRes = await handleKnowledge(req, url);
     if (knowledgeRes) return knowledgeRes;
+
+    const globalRes = await handleGlobal(req, url);
+    if (globalRes) return globalRes;
 
     return notFound("not found");
   },
