@@ -4,9 +4,12 @@ import { coreAdd, coreDelete } from "../stores/core.js";
 import { stAdd, stDelete, stTrim } from "../stores/shortTerm.js";
 import { vectors } from "../stores/vectors.js";
 import { sessions } from "../store.js";
+import { addSummary, deleteSessionSummaries } from "../consolidation/store.js";
+import { checkSession } from "../consolidation/scheduler.js";
 import { allEntities, allRelationships, applyExtraction, deleteSessionGraph } from "../knowledge/graph.js";
 import { mergeWithAgent, pruneSession } from "../knowledge/global.js";
 import { tryEnqueueKnowledge } from "../knowledge/worker.js";
+import { stRemoveMessages } from "../stores/shortTerm.js";
 import type { MemoryCommand, Visibility } from "./types.js";
 
 export const visibility = new Map<string, Visibility>();
@@ -41,6 +44,7 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
         text: cmd.message.content
       });
       tryEnqueueKnowledge({ sessionId: cmd.session_id, messageId: cmd.message.id, text: cmd.message.content });
+      checkSession(cmd.session_id);
       break;
     }
 
@@ -64,6 +68,7 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       pruneSession(cmd.session_id);
       visibility.delete(cmd.session_id);
       sessionAgents.delete(cmd.session_id);
+      deleteSessionSummaries(cmd.session_id);
       tryEnqueue({ kind: "deleteSession", sessionId: cmd.session_id });
       break;
     }
@@ -106,8 +111,20 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       }
       break;
     }
+    case "ApplySummary": {
+      addSummary(cmd.session_id, {
+        id: cmd.summary_id,
+        text: cmd.summary_text,
+        created_at_index: index,
+        consumed_message_ids: cmd.consumed_message_ids,
+        consumed_count: cmd.consumed_message_ids.length,
+        model: cmd.model,
+        prompt_version: cmd.prompt_version,
+      });
+      stRemoveMessages(cmd.session_id, cmd.consumed_message_ids);
+      break;
+    }
     case "ApplyFeedback":
-    case "ApplySummary":
     case "CreateCheckpoint":
     case "NoOp":
       break;
