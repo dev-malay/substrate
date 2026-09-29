@@ -1,6 +1,8 @@
 import { getRaftNode } from "../cluster.js";
-import type { KnowledgeExtractor } from "./extractor.js";
+import { sessionAgents, visibility } from "../raft/stateMachine.js";
 import { applyExtraction, isProcessed } from "./graph.js";
+import { mergeWithAgent } from "./global.js";
+import type { KnowledgeExtractor } from "./extractor.js";
 import type { KnowledgeJob } from "./types.js";
 
 const queue: KnowledgeJob[] = [];
@@ -39,6 +41,15 @@ async function runLoop(extractor: KnowledgeExtractor) {
         }
       } else {
         applyExtraction(job.sessionId, job.messageId, result.entities, result.relationships);
+        if (visibility.get(job.sessionId) === "Shared") {
+          mergeWithAgent(
+            job.sessionId,
+            sessionAgents.get(job.sessionId),
+            0,
+            result.entities,
+            result.relationships,
+          );
+        }
       }
     } catch {
       // extraction failure never blocks the queue
