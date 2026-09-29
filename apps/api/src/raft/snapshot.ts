@@ -4,6 +4,11 @@ import { sessions } from "../store.js";
 import type { Message } from "../types.js";
 import { tryEnqueue } from "../worker.js";
 import {
+  dumpSummaries,
+  restoreSummaries,
+  type Summary,
+} from "../consolidation/store.js";
+import {
   dumpGlobal,
   restoreGlobal,
 } from "../knowledge/global.js";
@@ -39,7 +44,7 @@ export type ClusterSnapshot = {
   globalGraph: ReturnType<typeof dumpGlobal> | null;
   visibility: Array<[string, Visibility]>;
   sessionAgents: Array<[string, string]>;
-  consolidated: Array<[string, unknown[]]>;
+  consolidated: Array<[string, Summary[]]>;
   memoryScores: Array<[string, Record<string, number>]>;
 };
 
@@ -52,7 +57,7 @@ export function buildSnapshot(): ClusterSnapshot {
     globalGraph: dumpGlobal(),
     visibility: [...visibility.entries()],
     sessionAgents: [...sessionAgents.entries()],
-    consolidated: [],
+    consolidated: dumpSummaries(),
     memoryScores: []
   };
 }
@@ -72,6 +77,7 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
   restoreGlobal(
     (snap.globalGraph || { nodes: [], edges: [] }) as ReturnType<typeof dumpGlobal>
   )
+  restoreSummaries((snap.consolidated || []) as Array<[string, Summary[]]>)
 
   visibility.clear();
   for (const [sessionId, value] of snap.visibility || []) {

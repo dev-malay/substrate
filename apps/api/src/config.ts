@@ -24,6 +24,11 @@ export type AppConfig = {
   knowledgeExtractor: string;
   knowledgeMaxWorkers: number;
   knowledgeChannelSize: number;
+  summarizer: string;
+  consolidationThreshold: number;
+  consolidationTargetWindow: number;
+  consolidationMaxWorkers: number;
+  consolidationChannelSize: number;
 };
 
 function intFromEnv(name: string, fallback: number): number {
@@ -103,7 +108,13 @@ export function getConfig(): AppConfig {
     historySnapshots: intFromEnv("HISTORY_SNAPSHOTS", 5),
     knowledgeExtractor: process.env.KNOWLEDGE_EXTRACTOR || "mock",
     knowledgeMaxWorkers: intFromEnv("KNOWLEDGE_MAX_WORKERS", 4),
-    knowledgeChannelSize: intFromEnv("KNOWLEDGE_CHANNEL_SIZE", 500)
+    knowledgeChannelSize: intFromEnv("KNOWLEDGE_CHANNEL_SIZE", 500),
+    summarizer: process.env.SUMMARIZER || "mock",
+    consolidationThreshold: intFromEnv("CONSOLIDATION_THRESHOLD", 50),
+    consolidationTargetWindow: intFromEnv("CONSOLIDATION_TARGET_WINDOW", 20),
+    consolidationMaxWorkers: intFromEnv("CONSOLIDATION_MAX_WORKERS", 2),
+    consolidationChannelSize: intFromEnv("CONSOLIDATION_CHANNEL_SIZE", 100)
+    
     
   };
 

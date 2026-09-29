@@ -23,6 +23,9 @@ import {
 } from "./store.js";
 import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
 import { assembleContext } from "./assembler.js";
+import { checkSession, startConsolidationWorkers } from "./consolidation/scheduler.js";
+import { handleConsolidation } from "./consolidation/handler.js";
+import { makeSummarizer } from "./knowledge/summarizer.js";
 import { makeKnowledgeExtractor } from "./knowledge/extractor.js";
 import { handleGlobal } from "./knowledge/globalHandler.js";
 import { handleKnowledge } from "./knowledge/handler.js";
@@ -38,6 +41,10 @@ startKnowledgeWorkers(
   makeKnowledgeExtractor(),
   config.knowledgeMaxWorkers,
   config.knowledgeChannelSize,
+);
+startConsolidationWorkers(
+  makeSummarizer(),
+  config.consolidationMaxWorkers, config.consolidationChannelSize
 );
 
 if (config.nodeId !== null && Number.isInteger(config.nodeId)) {
@@ -199,6 +206,7 @@ Bun.serve({
       const queued = tryEnqueue({ kind: "embed", sessionId, messageId: msg.id, text: content });
       if (!queued) return queueFull();
       tryEnqueueKnowledge({ sessionId, messageId: msg.id, text: content });
+      checkSession(sessionId);
       return noContent();
     }
 
@@ -274,6 +282,9 @@ Bun.serve({
 
     const globalRes = await handleGlobal(req, url);
     if (globalRes) return globalRes;
+
+    const consolidationRes = await handleConsolidation(req, url);
+    if (consolidationRes) return consolidationRes;
 
     return notFound("not found");
   },
