@@ -260,7 +260,7 @@ export class RaftNode {
         const entry = this.store.get(next);
         if (!entry) break;
         try {
-          applyCommand(entry.command);
+          applyCommand(entry.command, next);
         } catch {
         }
         this.lastApplied = next;

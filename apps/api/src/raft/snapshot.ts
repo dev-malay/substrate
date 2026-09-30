@@ -3,6 +3,19 @@ import { stDumpAll, stRestoreAll } from "../stores/shortTerm.js";
 import { sessions } from "../store.js";
 import type { Message } from "../types.js";
 import { tryEnqueue } from "../worker.js";
+import {
+  dumpSummaries,
+  restoreSummaries,
+  type Summary,
+} from "../consolidation/store.js";
+import {
+  dumpGlobal,
+  restoreGlobal,
+} from "../knowledge/global.js";
+import {
+  dumpGraphs,
+  restoreGraphs,
+} from "../knowledge/graph.js";
 import { sessionAgents, visibility } from "./stateMachine.js";
 import type { Entity, Relationship, Visibility } from "./types.js";
 
@@ -22,11 +35,16 @@ export type ClusterSnapshot = {
   version: number;
   shortTerm: SessionMessages[];
   coreMemory: SessionFacts[];
-  knowledgeGraph: { entities: Entity[]; relationships: Relationship[] };
-  globalGraph: null;
+  knowledgeGraph: Array<{
+    sessionId: string;
+    entities: Entity[];
+    relationships: Relationship[];
+    processed: string[];
+  }>;
+  globalGraph: ReturnType<typeof dumpGlobal> | null;
   visibility: Array<[string, Visibility]>;
   sessionAgents: Array<[string, string]>;
-  consolidated: Array<[string, unknown[]]>;
+  consolidated: Array<[string, Summary[]]>;
   memoryScores: Array<[string, Record<string, number>]>;
 };
 
@@ -35,11 +53,11 @@ export function buildSnapshot(): ClusterSnapshot {
     version: SNAPSHOT_VERSION,
     shortTerm: stDumpAll(),
     coreMemory: coreDumpAll(),
-    knowledgeGraph: { entities: [], relationships: [] },
-    globalGraph: null,
+    knowledgeGraph: dumpGraphs(),
+    globalGraph: dumpGlobal(),
     visibility: [...visibility.entries()],
     sessionAgents: [...sessionAgents.entries()],
-    consolidated: [],
+    consolidated: dumpSummaries(),
     memoryScores: []
   };
 }
@@ -48,6 +66,19 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
   sessions.clear();
   stRestoreAll(snap.shortTerm || []);
   coreRestoreAll(snap.coreMemory || []);
+  restoreGraphs(
+    (snap.knowledgeGraph || []) as Array<{
+      sessionId: string;
+      entities: Entity[];
+      relationships: Relationship[];
+      processed: string[];
+    }>
+  )
+  restoreGlobal(
+    (snap.globalGraph || { nodes: [], edges: [] }) as ReturnType<typeof dumpGlobal>
+  )
+  restoreSummaries((snap.consolidated || []) as Array<[string, Summary[]]>)
+
   visibility.clear();
   for (const [sessionId, value] of snap.visibility || []) {
     visibility.set(sessionId, value);
@@ -91,8 +122,8 @@ export function decodeSnapshot(data: Buffer): ClusterSnapshot {
     version: typeof raw.version === "number" ? raw.version : 1,
     shortTerm: raw.shortTerm || [],
     coreMemory: raw.coreMemory || [],
-    knowledgeGraph: raw.knowledgeGraph || { entities: [], relationships: [] },
-    globalGraph: null,
+    knowledgeGraph: Array.isArray(raw.knowledgeGraph) ? raw.knowledgeGraph : [],
+    globalGraph: raw.globalGraph || null,
     visibility: raw.visibility || [],
     sessionAgents: raw.sessionAgents || [],
     consolidated: raw.consolidated || [],
