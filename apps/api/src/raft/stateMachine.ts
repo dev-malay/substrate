@@ -6,6 +6,7 @@ import { vectors } from "../stores/vectors.js";
 import { sessions } from "../store.js";
 import { addSummary, deleteSessionSummaries } from "../consolidation/store.js";
 import { checkSession } from "../consolidation/scheduler.js";
+import { createCheckpoint, deleteSessionCheckpoints } from "../history/checkpoint.js";
 import { allEntities, allRelationships, applyExtraction, deleteSessionGraph } from "../knowledge/graph.js";
 import { mergeWithAgent, pruneSession } from "../knowledge/global.js";
 import { tryEnqueueKnowledge } from "../knowledge/worker.js";
@@ -14,6 +15,12 @@ import type { MemoryCommand, Visibility } from "./types.js";
 
 export const visibility = new Map<string, Visibility>();
 export const sessionAgents = new Map<string, string>();
+
+export let sideEffectsSuspended = false;
+
+export function suspendSideEffects(suspended: boolean) {
+  sideEffectsSuspended = suspended;
+}
 
 
 export function applyCommand(cmd: MemoryCommand, index = 0) {
@@ -43,8 +50,10 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
         messageId: cmd.message.id,
         text: cmd.message.content
       });
-      tryEnqueueKnowledge({ sessionId: cmd.session_id, messageId: cmd.message.id, text: cmd.message.content });
-      checkSession(cmd.session_id);
+      if (!sideEffectsSuspended) {
+        tryEnqueueKnowledge({ sessionId: cmd.session_id, messageId: cmd.message.id, text: cmd.message.content });
+        checkSession(cmd.session_id);
+      }
       break;
     }
 
@@ -69,6 +78,7 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       visibility.delete(cmd.session_id);
       sessionAgents.delete(cmd.session_id);
       deleteSessionSummaries(cmd.session_id);
+      deleteSessionCheckpoints(cmd.session_id);
       tryEnqueue({ kind: "deleteSession", sessionId: cmd.session_id });
       break;
     }
@@ -124,8 +134,11 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       stRemoveMessages(cmd.session_id, cmd.consumed_message_ids);
       break;
     }
+    case "CreateCheckpoint": {
+      createCheckpoint(cmd.session_id, cmd.name, cmd.at_index);
+      break;
+    }
     case "ApplyFeedback":
-    case "CreateCheckpoint":
     case "NoOp":
       break;
   }

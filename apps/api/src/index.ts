@@ -25,6 +25,7 @@ import type { AddMessageBody, CreateSessionBody, Role } from "./types.js";
 import { assembleContext } from "./assembler.js";
 import { checkSession, startConsolidationWorkers } from "./consolidation/scheduler.js";
 import { handleConsolidation } from "./consolidation/handler.js";
+import { handleHistory } from "./history/handler.js";
 import { makeSummarizer } from "./knowledge/summarizer.js";
 import { makeKnowledgeExtractor } from "./knowledge/extractor.js";
 import { handleGlobal } from "./knowledge/globalHandler.js";
@@ -285,6 +286,9 @@ Bun.serve({
 
     const consolidationRes = await handleConsolidation(req, url);
     if (consolidationRes) return consolidationRes;
+
+    const historyRes = await handleHistory(req, url);
+    if (historyRes) return historyRes;
 
     return notFound("not found");
   },
