@@ -14,6 +14,8 @@ export type AppConfig = {
   retrievalContextTtlSecs: number;
   retrievalCandidateMultiplier: number;
   retrievalFeedbackWeight: number;
+  retrievalLearningRate: number;
+  retrievalSetCreditFactor: number;
   nodeId: number | null;
   raftAddr: string | null;
   advertiseAddr: string | null;
@@ -99,6 +101,8 @@ export function getConfig(): AppConfig {
     retrievalContextTtlSecs: intFromEnv("RETRIEVAL_CONTEXT_TTL_SECS", 300),
     retrievalCandidateMultiplier: intFromEnv("RETRIEVAL_CANDIDATE_MULTIPLIER", 2),
     retrievalFeedbackWeight: floatFromEnv("RETRIEVAL_FEEDBACK_WEIGHT", 1.0),
+    retrievalLearningRate: floatFromEnv("RETRIEVAL_LEARNING_RATE", 0.1),
+    retrievalSetCreditFactor: floatFromEnv("RETRIEVAL_SET_CREDIT_FACTOR", 0.2),
     nodeId: nodeRaw.length > 0 ? Number(nodeRaw) : null,
     raftAddr: process.env.RAFT_ADDR || null,
     advertiseAddr: process.env.RAFT_ADVERTISE_ADDR || null,
