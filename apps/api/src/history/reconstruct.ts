@@ -2,6 +2,7 @@ import { sessions } from "../store.js";
 import { coreDumpAll, coreRestoreAll } from "../stores/core.js";
 import { stDumpAll, stRestoreAll } from "../stores/shortTerm.js";
 import { dumpSummaries, restoreSummaries } from "../consolidation/store.js";
+import { dumpScores, restoreScores } from "../adaptive/scoring.js";
 import { dumpGraphs, restoreGraphs } from "../knowledge/graph.js";
 import type { LogStore } from "../raft/logStore.js";
 import { applyCommand, suspendSideEffects } from "../raft/stateMachine.js";
@@ -58,6 +59,7 @@ export function reconstruct(
   const savedCore = coreDumpAll();
   const savedGraphs = dumpGraphs();
   const savedSums = dumpSummaries();
+  const savedScores = dumpScores();
   const savedSessions = new Map(sessions);
 
   suspendSideEffects(true);
@@ -77,6 +79,7 @@ export function reconstruct(
         coreRestoreAll(snap.coreMemory);
         restoreGraphs(snap.knowledgeGraph);
         restoreSummaries(snap.consolidated);
+        restoreScores(snap.memoryScores);
       } else {
         for (let i = 1; i <= base; i++) {
           const e = store.get(i);
@@ -114,6 +117,7 @@ export function reconstruct(
     coreRestoreAll(savedCore);
     restoreGraphs(savedGraphs);
     restoreSummaries(savedSums);
+    restoreScores(savedScores);
     sessions.clear();
     for (const [id, s] of savedSessions) sessions.set(id, s)
       
