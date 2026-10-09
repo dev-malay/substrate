@@ -4,6 +4,7 @@ import { stDumpAll, stRestoreAll } from "../stores/shortTerm.js";
 import { dumpSummaries, restoreSummaries } from "../consolidation/store.js";
 import { dumpScores, restoreScores } from "../adaptive/scoring.js";
 import { dumpGraphs, restoreGraphs } from "../knowledge/graph.js";
+import { metrics } from "../metrics.js";
 import type { LogStore } from "../raft/logStore.js";
 import { applyCommand, suspendSideEffects } from "../raft/stateMachine.js";
 import { decodeSnapshot } from "../raft/snapshot.js";
@@ -63,6 +64,7 @@ export function reconstruct(
   const savedSessions = new Map(sessions);
 
   suspendSideEffects(true);
+  const t0 = Date.now();
   try {
     stRestoreAll([]);
     coreRestoreAll([]);
@@ -113,6 +115,8 @@ export function reconstruct(
     }
   } finally {
     suspendSideEffects(false);
+    metrics.reconstructions.inc();
+    metrics.reconstructionDuration.observe({}, (Date.now() - t0) / 1000);
     stRestoreAll(savedShort);
     coreRestoreAll(savedCore);
     restoreGraphs(savedGraphs);

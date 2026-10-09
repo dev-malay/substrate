@@ -4,6 +4,7 @@ import { coreAdd, coreDelete } from "../stores/core.js";
 import { stAdd, stDelete, stTrim } from "../stores/shortTerm.js";
 import { vectors } from "../stores/vectors.js";
 import { sessions } from "../store.js";
+import { metrics } from "../metrics.js";
 import { addSummary, deleteSessionSummaries } from "../consolidation/store.js";
 import { checkSession } from "../consolidation/scheduler.js";
 import { createCheckpoint, deleteSessionCheckpoints } from "../history/checkpoint.js";
@@ -134,6 +135,8 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
         prompt_version: cmd.prompt_version,
       });
       stRemoveMessages(cmd.session_id, cmd.consumed_message_ids);
+      metrics.consolidations.inc();
+      metrics.messagesConsolidated.inc({}, cmd.consumed_message_ids.length);
       break;
     }
     case "CreateCheckpoint": {

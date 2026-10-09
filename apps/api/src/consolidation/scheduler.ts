@@ -4,6 +4,7 @@ import { SUMMARIZE_PROMPT_VERSION, type Summarizer } from "../knowledge/summariz
 import { listMessages } from "../store.js";
 import { addSummary } from "./store.js";
 import { stRemoveMessages } from "../stores/shortTerm.js";
+import { metrics } from "../metrics.js";
 
 export type ConsolidationJob = {
   sessionId: string;
@@ -61,7 +62,10 @@ async function runLoop(summarizer: Summarizer) {
       }
       const cut = all.length - config.consolidationTargetWindow;
       const consumed = all.slice(0, cut);
+      const t0 = Date.now();
       const text = await summarizer.summarize(consumed);
+      metrics.summarizationDuration.observe({ model: summarizer.model }, (Date.now() - t0) / 1000);
+      metrics.consolidationQueueSize.set(queue.length);
       const summaryId = crypto.randomUUID();
       if (node) {
         try {
@@ -91,6 +95,8 @@ async function runLoop(summarizer: Summarizer) {
           job.sessionId,
           consumed.map((m) => m.id),
         );
+        metrics.consolidations.inc();
+        metrics.messagesConsolidated.inc({}, consumed.length);
       }
     } catch {
       // summarizer failure never blocks the queue 

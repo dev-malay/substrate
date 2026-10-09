@@ -3,6 +3,7 @@ import { LogStore } from "./logStore.js";
 import { applyCommand } from "./stateMachine.js";
 import { buildSnapshot, encodeSnapshot } from "./snapshot.js";
 import { config } from "../config.js";
+import { metrics } from "../metrics.js";
 import { makeRaftClient, type RaftClient } from "./network.js";
 
 export class ForwardToLeader extends Error {
@@ -146,6 +147,7 @@ export class RaftNode {
   private async becomeLeader() {
     this.role = "leader";
     this.leaderId = this.id;
+    metrics.raftLeaderChanges.inc();
     if (this.electionTimer) clearTimeout(this.electionTimer);
     const last = this.store.lastIndex();
     for (const pid of this.peers.keys()) {
@@ -274,6 +276,9 @@ export class RaftNode {
     const snap = buildSnapshot();
     this.store.saveSnapshot(this.lastApplied, encodeSnapshot(snap));
     this.lastSnapshotIndex = this.lastApplied;
+    metrics.snapshotBuilds.inc();
+    metrics.snapshotLastIndex.set(this.lastSnapshotIndex);
+    metrics.historySnapshots.set(this.store.listSnapshotIndexes().length);
     this.store.pruneSnapshots(config.historySnapshots);
     this.store.purge(this.lastApplied, this.store.oldestRetainedIndex());
     return this.lastSnapshotIndex;
