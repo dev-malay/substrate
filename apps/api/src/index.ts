@@ -35,6 +35,10 @@ import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
 import { stTrim } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
 import { handleFeedback } from "./adaptive/handler.js";
+import { metrics, renderMetrics } from "./metrics.js";
+import { globalConflicts, globalEntities, globalRelationships } from "./knowledge/global.js";
+import { dumpSummaries } from "./consolidation/store.js";
+import { listCheckpoints } from "./history/checkpoint.js";
 
 const port = Number(process.env.PORT || 3000);
 const embedder = makeEmbeddingProvider();
@@ -114,6 +118,24 @@ Bun.serve({
 
     if (method === "GET" && path === "/health") {
       return new Response(null, { status: 200 });
+    }
+
+    if (method === "GET" && path === "/metrics") {
+      const node = getRaftNode();
+      metrics.raftTerm.set(node ? node.term : 0);
+      metrics.raftCommitIndex.set(node ? node.commitIndex : 0);
+      metrics.raftIsLeader.set(node && node.role === "leader" ? 1 : 0);
+      metrics.globalEntities.set(globalEntities().length);
+      metrics.globalRelationships.set(globalRelationships().length);
+      metrics.globalConflicts.set(globalConflicts().length);
+      metrics.summaries.set(
+        dumpSummaries().reduce((n, [, list]) => n + list.length, 0),
+      );
+      metrics.checkpoints.set(
+        [...sessions.keys()].reduce((n, id) => n + listCheckpoints(id).length, 0),
+      );
+      return new Response(renderMetrics(), {
+        headers: { "content-type": "text/plain; version=0.0.4" }})
     }
 
     const clusterRes = await handleCluster(req, url);
@@ -205,6 +227,7 @@ Bun.serve({
       if (viaRaft) return viaRaft;
       addMessage(msg);
       stTrim(sessionId, config.shortTermCount);
+      metrics.messagesAdded.inc({ role });
       const queued = tryEnqueue({ kind: "embed", sessionId, messageId: msg.id, text: content });
       if (!queued) return queueFull();
       tryEnqueueKnowledge({ sessionId, messageId: msg.id, text: content });
@@ -229,6 +252,7 @@ Bun.serve({
         threshold,
         topK,
       });
+      metrics.contextRequests.inc();
       return Response.json({ context: recent.context, query_id: recent.query_id });
     }
 
@@ -251,7 +275,9 @@ Bun.serve({
       void sessionId;
       const [qvec] = await embedder.embed([body.query.trim()]);
       if (!qvec) return Response.json({ results: [] });
+      const t0 = Date.now();
       const hits = vectors.search(sessionId, qvec, body.top_k);
+      metrics.vectorSearchDuration.observe({ store: "memory" }, (Date.now() - t0) / 1000);
       return Response.json({
         results: hits.map((h) => ({ memory_id: h.memoryId, text: h.text, score: h.score })),
       });
