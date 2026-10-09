@@ -4,6 +4,7 @@ import { applyExtraction, isProcessed } from "./graph.js";
 import { mergeWithAgent } from "./global.js";
 import type { KnowledgeExtractor } from "./extractor.js";
 import type { KnowledgeJob } from "./types.js";
+import { metrics } from "../metrics.js";
 
 const queue: KnowledgeJob[] = [];
 let maxSize = 500;
@@ -26,7 +27,13 @@ async function runLoop(extractor: KnowledgeExtractor) {
     if (node && node.role !== "leader") continue;
     if (isProcessed(job.sessionId, job.messageId)) continue;
     try {
+      const t0 = Date.now();
       const result = await extractor.extract(job.text);
+      metrics.knowledgeDuration.observe({ model: extractor.name }, (Date.now() - t0) / 1000);
+      metrics.knowledgeEntities.inc({}, result.entities.length);
+      metrics.knowledgeRelationships.inc({}, result.relationships.length);
+      metrics.knowledgeQueueSize.set(queue.length);
+      // metrics.knowledgeExtractions.inc();
       if (node) {
         try {
           await node.clientWrite({
