@@ -1,6 +1,7 @@
 import type { EmbeddingProvider } from "./embeddings.js";
 import { shortTermMessages } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
+import { metrics } from "./metrics.js";
 
 export type EmbeddingJob =
   | { kind: "embed"; sessionId: string; messageId: string; text: string }
@@ -49,8 +50,10 @@ async function runLoop(provider: EmbeddingProvider) {
       continue;
     }
     setStatus(job.sessionId, job.messageId, "processing");
+    const t0 = Date.now();
     try {
       const out = await provider.embed([job.text]);
+      metrics.embeddingDuration.observe({ model: provider.name }, (Date.now() - t0) / 1000);
       const vec = out[0];
       if (!vec) throw new Error("empty embedding");
       vectors.insert(job.sessionId, job.messageId, job.text, vec);
@@ -58,6 +61,8 @@ async function runLoop(provider: EmbeddingProvider) {
     } catch {
       setStatus(job.sessionId, job.messageId, "failed");
     }
+    // metrics.embeddingDuration.observe({ model: provider.name }, (Date.now() - t0) / 1000)
+    metrics.embeddingQueueSize.set(queue.length);
   }
 }
 

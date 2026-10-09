@@ -5,6 +5,7 @@ import { clusterWriteRedirect } from "../cluster.js";
 import { config } from "../config.js";
 import { resolveContext } from "../store.js";
 import { getScore, nextScore, setScore } from "./scoring.js";
+import { metrics } from "../metrics.js";
 
 
 type MemoryFeedback = {
@@ -39,6 +40,12 @@ export async function handleFeedback(req: Request, url: URL): Promise<Response |
 
   const alpha = config.retrievalLearningRate;
   const updates: Array<{ memoryId: string; newScore: number }> = [];
+  const explicit = Array.isArray(body.memory_feedback) && body.memory_feedback.length > 0;
+  metrics.feedback.inc({
+    signal: body.outcome === "positive" ? "positive" : "negative",
+    mode: explicit ? "explicit" : "set-credit"
+  });
+
   if (Array.isArray(body.memory_feedback) && body.memory_feedback.length > 0) {
     for (const fb of body.memory_feedback) {
       if (typeof fb.memory_id !== "string") continue;
@@ -89,5 +96,6 @@ export async function handleFeedback(req: Request, url: URL): Promise<Response |
 
 
   if (updates.length === 0) return badRequest("nothing to apply");
+  metrics.applyFeedback.inc({}, applied);
   return Response.json({ applied });
 }

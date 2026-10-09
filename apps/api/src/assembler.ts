@@ -8,6 +8,7 @@ import type { Message } from "./types.js";
 import { EmbeddingCache } from "./adaptive/cache.js";
 import { rerank } from "./adaptive/reranker.js";
 import { getScore } from "./adaptive/scoring.js";
+import { metrics } from "./metrics.js";
 
 const caches = new WeakMap<EmbeddingProvider, EmbeddingCache>();
 
@@ -80,6 +81,7 @@ export async function assembleContext(
       text: h.text,
       similarity: h.score,
     }));
+    const t0 = Date.now();
     const ranked = rerank(
       candidates,
       (id) => getScore(sessionId, id),
@@ -87,6 +89,8 @@ export async function assembleContext(
     )
       .filter((h) => h.similarity >= opts.threshold)
       .slice(0, opts.topK);
+    metrics.reranks.inc();
+    metrics.rerankDuration.observe({}, (Date.now() - t0) / 1000);
     const used =
       headTokens + shortLines.reduce((s, l) => s + lineTokens(l), 0);
     let budgetLeft = opts.maxTokens - used;
