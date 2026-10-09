@@ -8,6 +8,7 @@ import {
   restoreSummaries,
   type Summary,
 } from "../consolidation/store.js";
+import {dumpScores, restoreScores} from "../adaptive/scoring.js";
 import {
   dumpGlobal,
   restoreGlobal,
@@ -58,7 +59,7 @@ export function buildSnapshot(): ClusterSnapshot {
     visibility: [...visibility.entries()],
     sessionAgents: [...sessionAgents.entries()],
     consolidated: dumpSummaries(),
-    memoryScores: []
+    memoryScores: dumpScores()
   };
 }
 
@@ -78,6 +79,7 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
     (snap.globalGraph || { nodes: [], edges: [] }) as ReturnType<typeof dumpGlobal>
   )
   restoreSummaries((snap.consolidated || []) as Array<[string, Summary[]]>)
+  restoreScores((snap.memoryScores || []) as Array<[string, Record<string, number>]>)
 
   visibility.clear();
   for (const [sessionId, value] of snap.visibility || []) {

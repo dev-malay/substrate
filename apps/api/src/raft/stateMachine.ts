@@ -7,6 +7,7 @@ import { sessions } from "../store.js";
 import { addSummary, deleteSessionSummaries } from "../consolidation/store.js";
 import { checkSession } from "../consolidation/scheduler.js";
 import { createCheckpoint, deleteSessionCheckpoints } from "../history/checkpoint.js";
+import { deleteSessionScores, setScore } from "../adaptive/scoring.js";
 import { allEntities, allRelationships, applyExtraction, deleteSessionGraph } from "../knowledge/graph.js";
 import { mergeWithAgent, pruneSession } from "../knowledge/global.js";
 import { tryEnqueueKnowledge } from "../knowledge/worker.js";
@@ -79,6 +80,7 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       sessionAgents.delete(cmd.session_id);
       deleteSessionSummaries(cmd.session_id);
       deleteSessionCheckpoints(cmd.session_id);
+      deleteSessionScores(cmd.session_id);
       tryEnqueue({ kind: "deleteSession", sessionId: cmd.session_id });
       break;
     }
@@ -138,7 +140,10 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       createCheckpoint(cmd.session_id, cmd.name, cmd.at_index);
       break;
     }
-    case "ApplyFeedback":
+    case "ApplyFeedback": {
+      setScore(cmd.session_id, cmd.memory_id, cmd.new_score);
+      break;
+    }
     case "NoOp":
       break;
   }

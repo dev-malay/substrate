@@ -5,6 +5,20 @@ import { stRecent,stTrimToTokenBudget } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
 import { tokenCounter } from "./tokens.js";
 import type { Message } from "./types.js";
+import { EmbeddingCache } from "./adaptive/cache.js";
+import { rerank } from "./adaptive/reranker.js";
+import { getScore } from "./adaptive/scoring.js";
+
+const caches = new WeakMap<EmbeddingProvider, EmbeddingCache>();
+
+function cacheFor(provider: EmbeddingProvider): EmbeddingCache {
+  let cache = caches.get(provider);
+  if (!cache) {
+    cache = new EmbeddingCache(provider);
+    caches.set(provider, cache);
+  }
+  return cache;
+}
 
 export type AssembleOptions = {
   maxTokens: number;
@@ -59,25 +73,31 @@ export async function assembleContext(
   let memoryIds: string[] = [];
   let scores: number[] = [];
   if (query) {
-    const [qvec] = await embedder.embed([query]);
-    if (qvec) {
-      const widened = Math.max(1, opts.topK * config.retrievalCandidateMultiplier);
-      const hits = vectors
-        .search(sessionId, qvec, widened)
-        .filter((h) => h.score >= opts.threshold)
-        .slice(0, opts.topK);
-      const used =
-        headTokens + shortLines.reduce((s, l) => s + lineTokens(l), 0);
-      let budgetLeft = opts.maxTokens - used;
-      for (const h of hits) {
-        const line = `Memory: ${h.text}`;
-        const cost = lineTokens(line);
-        if (cost > budgetLeft) continue;
-        budgetLeft -= cost;
-        memLines.push(line);
-        memoryIds.push(h.memoryId);
-        scores.push(h.score);
-      }
+    const qvec = await cacheFor(embedder).getOrEmbed(query);
+    const widened = Math.max(1, opts.topK * config.retrievalCandidateMultiplier);
+    const candidates = vectors.search(sessionId, qvec, widened).map((h) => ({
+      memoryId: h.memoryId,
+      text: h.text,
+      similarity: h.score,
+    }));
+    const ranked = rerank(
+      candidates,
+      (id) => getScore(sessionId, id),
+      config.retrievalFeedbackWeight,
+    )
+      .filter((h) => h.similarity >= opts.threshold)
+      .slice(0, opts.topK);
+    const used =
+      headTokens + shortLines.reduce((s, l) => s + lineTokens(l), 0);
+    let budgetLeft = opts.maxTokens - used;
+    for (const h of ranked) {
+      const line = `Memory: ${h.text}`;
+      const cost = lineTokens(line);
+      if (cost > budgetLeft) continue;
+      budgetLeft -= cost;
+      memLines.push(line);
+      memoryIds.push(h.memoryId);
+      scores.push(h.finalScore);
     }
   }
 

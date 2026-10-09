@@ -34,6 +34,7 @@ import { startKnowledgeWorkers, tryEnqueueKnowledge } from "./knowledge/worker.j
 import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
 import { stTrim } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
+import { handleFeedback } from "./adaptive/handler.js";
 
 const port = Number(process.env.PORT || 3000);
 const embedder = makeEmbeddingProvider();
@@ -289,6 +290,9 @@ Bun.serve({
 
     const historyRes = await handleHistory(req, url);
     if (historyRes) return historyRes;
+
+    const feedbackRes = await handleFeedback(req, url);
+    if (feedbackRes) return feedbackRes;
 
     return notFound("not found");
   },
