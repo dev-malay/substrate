@@ -35,6 +35,7 @@ import { startEmbeddingWorkers, tryEnqueue } from "./worker.js";
 import { stTrim } from "./stores/shortTerm.js";
 import { vectors } from "./stores/vectors.js";
 import { handleFeedback } from "./adaptive/handler.js";
+import { handleOvl } from "./ovl/handler.js";
 import { metrics, renderMetrics } from "./metrics.js";
 import { globalConflicts, globalEntities, globalRelationships } from "./knowledge/global.js";
 import { dumpSummaries } from "./consolidation/store.js";
@@ -319,6 +320,9 @@ Bun.serve({
 
     const feedbackRes = await handleFeedback(req, url);
     if (feedbackRes) return feedbackRes;
+
+    const ovlRes = await handleOvl(req, url);
+    if (ovlRes) return ovlRes;
 
     return notFound("not found");
   },

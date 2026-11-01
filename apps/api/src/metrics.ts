@@ -206,7 +206,10 @@ export const metrics = {
     DUR
   ),
   cacheHits: new CounterVec("substrate_embedding_cache_hits_total", "cache hits", []),
-  cacheMisses: new CounterVec("substrate_embedding_cache_misses_total", "cache misses", [])
+  cacheMisses: new CounterVec("substrate_embedding_cache_misses_total", "cache misses", []),
+  ovlDecisions: new CounterVec("substrate_ovl_decisions_total", "decisions recorded", []),
+  ovlOutcomes: new CounterVec("substrate_ovl_outcomes_total", "outcomes recorded", ["success"]),
+  ovlReweights: new CounterVec("substrate_ovl_reweights_total", "memories reweighted", []),
 };
 
 

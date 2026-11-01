@@ -9,6 +9,7 @@ import {
   type Summary,
 } from "../consolidation/store.js";
 import {dumpScores, restoreScores} from "../adaptive/scoring.js";
+import {dumpOvl, restoreOvl} from "../ovl/store.js";
 import {
   dumpGlobal,
   restoreGlobal,
@@ -47,6 +48,7 @@ export type ClusterSnapshot = {
   sessionAgents: Array<[string, string]>;
   consolidated: Array<[string, Summary[]]>;
   memoryScores: Array<[string, Record<string, number>]>;
+  ovl: ReturnType<typeof dumpOvl> | null;
 };
 
 export function buildSnapshot(): ClusterSnapshot {
@@ -59,7 +61,8 @@ export function buildSnapshot(): ClusterSnapshot {
     visibility: [...visibility.entries()],
     sessionAgents: [...sessionAgents.entries()],
     consolidated: dumpSummaries(),
-    memoryScores: dumpScores()
+    memoryScores: dumpScores(),
+    ovl: dumpOvl()
   };
 }
 
@@ -80,6 +83,7 @@ export function restoreSnapshot(snap: Partial<ClusterSnapshot>) {
   )
   restoreSummaries((snap.consolidated || []) as Array<[string, Summary[]]>)
   restoreScores((snap.memoryScores || []) as Array<[string, Record<string, number>]>)
+  if (snap.ovl) restoreOvl(snap.ovl as ReturnType<typeof dumpOvl>)
 
   visibility.clear();
   for (const [sessionId, value] of snap.visibility || []) {
@@ -129,6 +133,7 @@ export function decodeSnapshot(data: Buffer): ClusterSnapshot {
     visibility: raw.visibility || [],
     sessionAgents: raw.sessionAgents || [],
     consolidated: raw.consolidated || [],
-    memoryScores: raw.memoryScores || []
+    memoryScores: raw.memoryScores || [],
+    ovl: raw.ovl || null
   };
 }
