@@ -1,3 +1,5 @@
+import type { Action, Decision, Outcome } from "../ovl/store.js";
+
 export type NodeId = number;
 
 export type MessagePayload = {
@@ -46,6 +48,9 @@ export type MemoryCommand =
       prompt_version: string;
     }
   | { kind: "CreateCheckpoint"; session_id: string; name: string; at_index: number }
+  | { kind: "RecordDecision"; decision: Decision }
+  | { kind: "AttachAction"; action: Action }
+  | { kind: "RecordOutcome"; outcome: Outcome }
   | { kind: "NoOp" };
 
 export type LogId = {

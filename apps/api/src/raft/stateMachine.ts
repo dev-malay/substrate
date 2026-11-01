@@ -5,6 +5,13 @@ import { stAdd, stDelete, stTrim } from "../stores/shortTerm.js";
 import { vectors } from "../stores/vectors.js";
 import { sessions } from "../store.js";
 import { metrics } from "../metrics.js";
+import { reweightFromOutcome } from "../ovl/reweight.js";
+import {
+  attachAction,
+  deleteSessionOvl,
+  recordDecision,
+  recordOutcome,
+} from "../ovl/store.js";
 import { addSummary, deleteSessionSummaries } from "../consolidation/store.js";
 import { checkSession } from "../consolidation/scheduler.js";
 import { createCheckpoint, deleteSessionCheckpoints } from "../history/checkpoint.js";
@@ -82,6 +89,7 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
       deleteSessionSummaries(cmd.session_id);
       deleteSessionCheckpoints(cmd.session_id);
       deleteSessionScores(cmd.session_id);
+      deleteSessionOvl(cmd.session_id);
       tryEnqueue({ kind: "deleteSession", sessionId: cmd.session_id });
       break;
     }
@@ -145,6 +153,22 @@ export function applyCommand(cmd: MemoryCommand, index = 0) {
     }
     case "ApplyFeedback": {
       setScore(cmd.session_id, cmd.memory_id, cmd.new_score);
+      break;
+    }
+    case "RecordDecision": {
+      if (recordDecision(cmd.decision)) metrics.ovlDecisions.inc();
+      break;
+    }
+    case "AttachAction": {
+      attachAction(cmd.action);
+      break;
+    }
+    case "RecordOutcome": {
+      if (recordOutcome(cmd.outcome)) {
+        const reweighted = reweightFromOutcome(cmd.outcome.decision_id, cmd.outcome.success);
+        metrics.ovlOutcomes.inc({ success: String(cmd.outcome.success) });
+        metrics.ovlReweights.inc({}, reweighted);
+      }
       break;
     }
     case "NoOp":
